@@ -7,7 +7,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const SUPABASE_ANON_KEY = "sb_publishable_kcj0d9LQPRBjpIYl71WIAg_NQyoiyll";
     const TABELA_CONTAS = "contas";
 
-    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+            persistSession: false,
+            autoRefreshToken: false
+        }
+    });
 
     function resolverNomeUsuario(user) {
         if (!user || !user.email) return "Usuário";
@@ -668,20 +673,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (authError) authError.style.display = "none";
     }
 
-    async function checarSessaoInicial() {
-        mostrarLoading("Carregando...", "Verificando sessão ativa");
-
-        const { data: { session }, error } = await supabaseClient.auth.getSession();
-
-        if (error || !session || !session.user) {
-            usuarioLogadoNome = "";
-            abrirModalSenha();
-            return;
-        }
-
-        usuarioLogadoNome = resolverNomeUsuario(session.user);
-        await carregarContas({ gerenciarLoading: false });
-        esconderLoading();
+    aasync function checarSessaoInicial() {
+        usuarioLogadoNome = "";
+        contasEmMemoria = [];
+        if (accountsList) accountsList.innerHTML = "";
+        await supabaseClient.auth.signOut();
+        abrirModalSenha();
     }
 
     checarSessaoInicial();
