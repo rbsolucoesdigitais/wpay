@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Finanças">
-    <title>Controle Financeiro</title>
+    <title>Wpay</title>
     <link rel="manifest" href="manifest.json">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
     <main class="app-shell">
@@ -26,9 +27,11 @@
                         <img src="logo.png" alt="">
                     </div>
                 </div>
-                <button type="button" id="btnInstalarApp" style="display: none; align-items: center;
-                 gap: 6px; padding: 9px 14px; border-radius: 12px; border: 1px solid #dbe4ff;
-                  background: #eef2ff; color: #4263eb; font-size: 0.8rem; font-weight: 700; white-space: nowrap;">
+                <button
+                    type="button"
+                    id="btnInstalarApp"
+                    style="display: none; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 12px; border: 1px solid #dbe4ff; background: #eef2ff; color: #4263eb; font-size: 0.8rem; font-weight: 700; white-space: nowrap;"
+                >
                     <i data-lucide="download" style="width: 16px; height: 16px;"></i>
                     <span>Instalar</span>
                 </button>
@@ -84,6 +87,9 @@
                         <img src="logo.png" alt="">
                     </div>
                 </div>
+                <button class="add-button" id="openModal" type="button" aria-label="Adicionar nova conta">
+                    <i data-lucide="plus"></i>
+                </button>
             </header>
 
             <div style="margin-top: 12px; flex-shrink: 0;">
@@ -149,25 +155,28 @@
             </div>
         </div>
 
-        <!-- Modal de Autenticação (Senha) -->
+        <!-- Modal de Autenticação (Supabase Auth) -->
         <div class="modal-overlay" id="authModal">
             <div class="modal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
                 <div class="modal-heading">
                     <div class="modal-icon"><i data-lucide="lock"></i></div>
                     <span class="eyebrow">ACESSO RESTRITO</span>
-                    <h2 id="authModalTitle">Digite sua senha</h2>
-                    <p>Informe sua senha pessoal para liberar o acesso ao controle financeiro.</p>
+                    <h2 id="authModalTitle">Entrar na conta</h2>
+                    <p>Informe seu e-mail e senha cadastrados no Supabase para acessar.</p>
                 </div>
 
                 <form id="authForm">
-                    <input type="text" name="username" autocomplete="username" hidden aria-hidden="true">
-                    <label for="senhaInput">Senha de acesso</label>
-                    <input type="password" id="senhaInput" placeholder="••••" autocomplete="current-password" required>
+                    <label for="emailInput">E-mail</label>
+                    <input type="email" id="emailInput" placeholder="ribeiro@familia.local" autocomplete="username" required>
+
+                    <label for="senhaInput" style="margin-top: 10px; display: block;">Senha</label>
+                    <input type="password" id="senhaInput" placeholder="••••••" autocomplete="current-password" required>
+
                     <p id="authError" style="color: #e11d48; font-size: 0.85rem; margin-top: 6px; display: none;"></p>
 
                     <div class="modal-actions">
                         <button type="submit" class="btn-save" id="btnDesbloquear">
-                            <i data-lucide="unlock"></i> Desbloquear
+                            <i data-lucide="unlock"></i> Entrar
                         </button>
                     </div>
                 </form>
