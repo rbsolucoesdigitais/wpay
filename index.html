@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#4263eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Finanças">
+    <title>Controle Financeiro</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <main class="app-shell">
+        <!-- ABA 1: DASH -->
+        <section class="tab-content active" id="dash">
+            <header class="home-header">
+                <div class="brand-block">
+                    <div class="brand-mark">
+                        <img src="logo.png" alt="">
+                    </div>
+                </div>
+                <button type="button" id="btnInstalarApp" style="display: none; align-items: center;
+                 gap: 6px; padding: 9px 14px; border-radius: 12px; border: 1px solid #dbe4ff;
+                  background: #eef2ff; color: #4263eb; font-size: 0.8rem; font-weight: 700; white-space: nowrap;">
+                    <i data-lucide="download" style="width: 16px; height: 16px;"></i>
+                    <span>Instalar</span>
+                </button>
+            </header>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px;">
+                <div style="background: #ffffff; border-radius: 16px; padding: 14px; border: 1px solid #eef2f6; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                    <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; display: block;">QTD CONTAS A PAGAR</span>
+                    <div id="qtdPendentes" style="font-size: 1.5rem; font-weight: 800; color: #0f172a; margin-top: 6px;">0</div>
+                </div>
+
+                <div style="background: #ffffff; border-radius: 16px; padding: 14px; border: 1px solid #eef2f6; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                    <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; display: block;">QTD CONTAS PAGAS</span>
+                    <div id="qtdPagas" style="font-size: 1.5rem; font-weight: 800; color: #0f172a; margin-top: 6px;">0</div>
+                </div>
+
+                <div style="background: #ffffff; border-radius: 16px; padding: 14px; border: 1px solid #eef2f6; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                    <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; display: block;">DÉBITO TOTAL</span>
+                    <div id="debitoTotal" style="font-size: 1.15rem; font-weight: 800; color: #0f172a; margin-top: 8px;">R$ 0,00</div>
+                </div>
+
+                <div style="background: #ffffff; border-radius: 16px; padding: 14px; border: 1px solid #eef2f6; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                    <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; display: block;">VALOR PAGO</span>
+                    <div id="valorPagoTotal" style="font-size: 1.15rem; font-weight: 800; color: #10b981; margin-top: 8px;">R$ 0,00</div>
+                </div>
+            </div>
+
+            <div style="background: #ffffff; border-radius: 16px; padding: 14px 16px; margin-top: 12px; border: 1px solid #eef2f6; box-shadow: 0 2px 8px rgba(0,0,0,0.04); display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.78rem; color: #64748b; font-weight: 700;">SALDO DEVEDOR</span>
+                <div id="saldoDevedor" style="font-size: 1.25rem; font-weight: 800; color: #fa8072;">R$ 0,00</div>
+            </div>
+
+            <div style="background: #ffffff; border-radius: 16px; padding: 18px; margin-top: 14px; border: 1px solid #eef2f6; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <strong style="font-size: 0.95rem; color: #0f172a;">Percentual Quitado</strong>
+                    <span id="labelMesAtual" style="font-size: 0.8rem; color: #64748b; text-transform: capitalize;"></span>
+                </div>
+                <div style="position: relative; height: 220px; display: flex; align-items: center; justify-content: center;">
+                    <canvas id="graficoStatus"></canvas>
+                    <div id="percentualQuitadoCentro" style="position: absolute; top: 44%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none;">
+                        <div style="font-size: 1.35rem; font-weight: 800; color: #10b981;">0%</div>
+                        <div style="font-size: 0.7rem; font-weight: 700; color: #64748b;">QUITADO</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ABA 2: CONTAS -->
+        <section class="tab-content" id="contas">
+            <header class="home-header">
+                <div class="brand-block">
+                    <div class="brand-mark">
+                        <img src="logo.png" alt="">
+                    </div>
+                </div>
+            </header>
+
+            <div style="margin-top: 12px; flex-shrink: 0;">
+                <input
+                    type="search"
+                    id="searchInput"
+                    placeholder="Buscar por nome ou descrição..."
+                    autocomplete="off"
+                >
+            </div>
+
+            <div id="statusFilters" style="margin-top: 10px;">
+                <button type="button" class="filter-btn active" data-filter="Todos">Todos</button>
+                <button type="button" class="filter-btn" data-filter="Pendente">Pendentes</button>
+                <button type="button" class="filter-btn" data-filter="Pago">Pagos</button>
+            </div>
+
+            <div id="accountsList"></div>
+
+            <div class="empty-state" id="emptyState">
+                <div class="empty-icon"><i data-lucide="receipt-text"></i></div>
+                <h3>Nenhuma conta encontrada</h3>
+                <p>Adicione uma nova conta ou ajuste os filtros e a busca para visualizar seus lançamentos.</p>
+            </div>
+        </section>
+
+        <!-- Modal Nova Conta / Edição -->
+        <div class="modal-overlay" id="modal">
+            <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+                <div class="modal-heading">
+                    <div class="modal-icon"><i data-lucide="file-plus-2"></i></div>
+                    <button class="modal-close" type="button" id="closeModal" aria-label="Fechar">
+                        <i data-lucide="x"></i>
+                    </button>
+                    <span class="eyebrow">NOVO LANÇAMENTO</span>
+                    <h2 id="modalTitle">Adicionar conta</h2>
+                    <p>Preencha os dados para incluir uma conta no seu controle.</p>
+                </div>
+
+                <form id="accountForm">
+                    <label for="conta">Nome da conta</label>
+                    <input type="text" id="conta" placeholder="Ex.: Conta de energia" autocomplete="off" required>
+
+                    <div class="form-row">
+                        <div>
+                            <label for="vencimento">Vencimento</label>
+                            <input type="date" id="vencimento" required>
+                        </div>
+                        <div>
+                            <label for="valor">Valor (R$)</label>
+                            <input type="number" id="valor" min="0.01" step="0.01" placeholder="0,00" required>
+                        </div>
+                    </div>
+
+                    <label for="descricao">Descrição <span class="optional">(opcional)</span></label>
+                    <input type="text" id="descricao" maxlength="50" placeholder="Adicione uma observação">
+
+                    <div class="modal-actions">
+                        <button type="submit" class="btn-save"><i data-lucide="check"></i> Salvar conta</button>
+                        <button type="button" class="btn-cancel" id="cancelModal">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal de Autenticação (Senha) -->
+        <div class="modal-overlay" id="authModal">
+            <div class="modal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+                <div class="modal-heading">
+                    <div class="modal-icon"><i data-lucide="lock"></i></div>
+                    <span class="eyebrow">ACESSO RESTRITO</span>
+                    <h2 id="authModalTitle">Digite sua senha</h2>
+                    <p>Informe sua senha pessoal para liberar o acesso ao controle financeiro.</p>
+                </div>
+
+                <form id="authForm">
+                    <input type="text" name="username" autocomplete="username" hidden aria-hidden="true">
+                    <label for="senhaInput">Senha de acesso</label>
+                    <input type="password" id="senhaInput" placeholder="••••" autocomplete="current-password" required>
+                    <p id="authError" style="color: #e11d48; font-size: 0.85rem; margin-top: 6px; display: none;"></p>
+
+                    <div class="modal-actions">
+                        <button type="submit" class="btn-save" id="btnDesbloquear">
+                            <i data-lucide="unlock"></i> Desbloquear
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Navegação principal">
+        <button class="nav-item active" data-tab="dash" type="button">
+            <i data-lucide="pie-chart"></i><span>Dash</span>
+        </button>
+        <button class="nav-item" data-tab="contas" type="button">
+            <i data-lucide="wallet"></i><span>Contas</span>
+        </button>
+    </nav>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="script.js"></script>
+</body>
+</html>
