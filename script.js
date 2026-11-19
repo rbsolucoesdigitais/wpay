@@ -1,21 +1,24 @@
-
-// URL DO APP DA WEB
-// https://script.google.com/macros/s/AKfycbxftMwBS4FAmngTITeA6mVjBfvDrnLBOprHYHnVtlOgxrMtgnDN9mYq6tlOVcIoaUhEYA/exec
-
-
-
-
-
-
 document.addEventListener("DOMContentLoaded", () => {
 
     // ==========================================
-    // CONFIGURAÇÃO DA API
+    // CONFIGURAÇÃO DO SUPABASE
     // ==========================================
-    const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbxftMwBS4FAmngTITeA6mVjBfvDrnLBOprHYHnVtlOgxrMtgnDN9mYq6tlOVcIoaUhEYA/exec";
+    const SUPABASE_URL = "https://ghecmywfruopddenylfh.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_kcj0d9LQPRBjpIYl71WIAg_NQyoiyll";
+    const TABELA_CONTAS = "contas";
+
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    function resolverNomeUsuario(user) {
+        if (!user || !user.email) return "Usuário";
+        const emailLower = user.email.toLowerCase();
+        if (emailLower.startsWith("ribeiro")) return "Ribeiro";
+        if (emailLower.startsWith("jussara")) return "Jussara";
+        return user.email.split("@")[0];
+    }
 
     // ==========================================
-    // PWA: SERVICE WORKER E SOLICITAÇÃO DE INSTALAÇÃO
+    // PWA: SERVICE WORKER E INSTALAÇÃO
     // ==========================================
     const btnInstalarApp = document.getElementById("btnInstalarApp");
     let eventoInstalacaoPendente = null;
@@ -38,14 +41,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const promptEvento = eventoInstalacaoPendente;
         const resposta = await Swal.fire({
-            title: "Instale o WPay",
-            text: "Adicione o WPay à sua tela inicial e acesse de forma fácil.",
+            title: "Instalar Controle Financeiro?",
+            text: "Adicione o app à sua tela inicial para acessar mais rápido, como um aplicativo nativo.",
             icon: "info",
             showCancelButton: true,
             confirmButtonColor: "#4263eb",
             cancelButtonColor: "#64748b",
-            confirmButtonText: "Instalar agora",
-            cancelButtonText: "Depois"
+            confirmButtonText: "Instalar app",
+            cancelButtonText: "Agora não"
         });
 
         if (resposta.isConfirmed) {
@@ -124,9 +127,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const campoValor = document.getElementById("valor");
     const campoDescricao = document.getElementById("descricao");
 
-    // Modal de Autenticação (Senha)
+    // Modal de Autenticação (Supabase Auth)
     const authModal = document.getElementById("authModal");
     const authForm = document.getElementById("authForm");
+    const emailInput = document.getElementById("emailInput");
     const senhaInput = document.getElementById("senhaInput");
     const authError = document.getElementById("authError");
 
@@ -135,11 +139,12 @@ document.addEventListener("DOMContentLoaded", () => {
     let filtroAtual = "Todos";
     let termoBusca = "";
     let loadingAtivo = false;
+    let usuarioLogadoNome = "";
 
     // ==========================================
     // CONTROLE CENTRALIZADO DE LOADING
     // ==========================================
-    function mostrarLoading(titulo = "Carregando...", texto = "Estamos carregamos as informações") {
+    function mostrarLoading(titulo = "Carregando...", texto = "Aguarde enquanto carregamos os dados") {
         if (typeof Swal === "undefined") return;
         loadingAtivo = true;
 
@@ -430,36 +435,39 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ==========================================
-    // CARREGAR E RENDERIZAR CONTAS
+    // CARREGAR E RENDERIZAR CONTAS (SUPABASE)
     // ==========================================
     async function carregarContas({ gerenciarLoading = true } = {}) {
-        const senhaSalva = localStorage.getItem("controle_financeiro_senha");
-        if (!senhaSalva) return;
-
         if (gerenciarLoading) {
-            mostrarLoading("Carregando dados...", "Por favor, aguarde");
+            mostrarLoading("Carregando informações...", "Por favor, aguarde.");
         }
 
         try {
-            const resposta = await fetch(URL_APPS_SCRIPT, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify({ acao: "listar", senha: senhaSalva })
-            });
+            const { data, error } = await supabaseClient
+                .from(TABELA_CONTAS)
+                .select("*");
 
-            const resultado = await resposta.json();
-
-            if (resultado.status === "sucesso") {
-                contasEmMemoria = Array.isArray(resultado.dados) ? resultado.dados : [];
-                aplicarFiltroERenderizar();
-                atualizarDash(contasEmMemoria);
-            } else {
-                contasEmMemoria = [];
-                aplicarFiltroERenderizar();
-                atualizarDash([]);
+            if (error) {
+                throw error;
             }
+
+            contasEmMemoria = Array.isArray(data)
+                ? data.map(item => ({
+                    id: String(item.id),
+                    usuario: item.usuario || "Usuário",
+                    conta: item.conta || "",
+                    vencimento: item.vencimento || "",
+                    valor: Number(item.valor) || 0,
+                    descricao: item.descricao || "",
+                    status: item.status === "Pago" ? "Pago" : "Pendente",
+                    criadoEm: item.criado_em || item.criadoEm || ""
+                }))
+                : [];
+
+            aplicarFiltroERenderizar();
+            atualizarDash(contasEmMemoria);
         } catch (erro) {
-            console.error("Erro ao carregar contas:", erro);
+            console.error("Erro ao carregar contas no Supabase:", erro);
             if (accountsList) {
                 accountsList.innerHTML = `<p style="text-align: center; color: #e11d48; padding: 20px;">Erro de conexão ao carregar os dados.</p>`;
             }
@@ -557,12 +565,6 @@ document.addEventListener("DOMContentLoaded", () => {
     async function alternarStatus(item) {
         if (loadingAtivo) return;
 
-        const senhaAtual = localStorage.getItem("controle_financeiro_senha");
-        if (!senhaAtual) {
-            abrirModalSenha("Sessão expirada. Digite sua senha novamente.");
-            return;
-        }
-
         const novoStatus = item.status === "Pago" ? "Pendente" : "Pago";
         mostrarLoading(
             novoStatus === "Pago" ? "Quitando conta..." : "Reabrindo conta...",
@@ -570,30 +572,21 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
         try {
-            const resposta = await fetch(URL_APPS_SCRIPT, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify({
-                    acao: "alternar_status",
-                    senha: senhaAtual,
-                    id: item.id,
-                    status: novoStatus
-                })
-            });
+            const { error } = await supabaseClient
+                .from(TABELA_CONTAS)
+                .update({ status: novoStatus })
+                .eq("id", item.id);
 
-            const resultado = await resposta.json();
-
-            if (resultado.status === "sucesso") {
-                await carregarContas({ gerenciarLoading: false });
-                esconderLoading();
-            } else {
-                esconderLoading();
-                Swal.fire({ icon: "error", title: "Erro", text: resultado.mensagem });
+            if (error) {
+                throw error;
             }
+
+            await carregarContas({ gerenciarLoading: false });
+            esconderLoading();
         } catch (erro) {
             esconderLoading();
             console.error("Erro ao alterar status:", erro);
-            Swal.fire({ icon: "error", title: "Erro de Conexão", text: "Não foi possível atualizar o status." });
+            Swal.fire({ icon: "error", title: "Erro", text: "Não foi possível atualizar o status." });
         }
     }
 
@@ -616,50 +609,36 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (!confirmacao.isConfirmed) return;
 
-        const senhaAtual = localStorage.getItem("controle_financeiro_senha");
-        if (!senhaAtual) {
-            abrirModalSenha("Sessão expirada. Digite sua senha novamente.");
-            return;
-        }
-
-        mostrarLoading("Excluindo...", "Removendo registro e atualizando dados");
+        mostrarLoading("Excluindo...", "Removendo registro");
 
         try {
-            const resposta = await fetch(URL_APPS_SCRIPT, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify({
-                    acao: "excluir",
-                    senha: senhaAtual,
-                    id: item.id
-                })
-            });
+            const { error } = await supabaseClient
+                .from(TABELA_CONTAS)
+                .delete()
+                .eq("id", item.id);
 
-            const resultado = await resposta.json();
-
-            if (resultado.status === "sucesso") {
-                await carregarContas({ gerenciarLoading: false });
-                esconderLoading();
-                Swal.fire({
-                    icon: "success",
-                    title: "Excluída!",
-                    text: "A conta foi removida com sucesso.",
-                    timer: 1800,
-                    showConfirmButton: false
-                });
-            } else {
-                esconderLoading();
-                Swal.fire({ icon: "error", title: "Erro", text: resultado.mensagem });
+            if (error) {
+                throw error;
             }
+
+            await carregarContas({ gerenciarLoading: false });
+            esconderLoading();
+            Swal.fire({
+                icon: "success",
+                title: "Excluída!",
+                text: "A conta foi removida com sucesso.",
+                timer: 1800,
+                showConfirmButton: false
+            });
         } catch (erro) {
             esconderLoading();
             console.error("Erro ao excluir:", erro);
-            Swal.fire({ icon: "error", title: "Erro de Conexão", text: "Não foi possível excluir a conta." });
+            Swal.fire({ icon: "error", title: "Erro", text: "Não foi possível excluir a conta." });
         }
     }
 
     // ==========================================
-    // CONTROLE DE ACESSO E VALIDAÇÃO DE SENHA
+    // CONTROLE DE ACESSO (SUPABASE AUTH)
     // ==========================================
     function abrirModalSenha(mensagemErro = "") {
         esconderLoading();
@@ -674,7 +653,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         authModal.classList.add("show");
         setTimeout(() => {
-            if (senhaInput) senhaInput.focus();
+            if (emailInput && !emailInput.value) {
+                emailInput.focus();
+            } else if (senhaInput) {
+                senhaInput.focus();
+            }
         }, 100);
     }
 
@@ -685,39 +668,20 @@ document.addEventListener("DOMContentLoaded", () => {
         if (authError) authError.style.display = "none";
     }
 
-    async function validarSenhaNoServidor(senha) {
-        try {
-            const resposta = await fetch(URL_APPS_SCRIPT, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify({ acao: "validar_senha", senha: senha })
-            });
-            return await resposta.json();
-        } catch (erro) {
-            console.error("Erro na validação:", erro);
-            return { status: "erro", mensagem: "Erro de conexão com o servidor." };
-        }
-    }
-
     async function checarSessaoInicial() {
-        const senhaSalva = localStorage.getItem("controle_financeiro_senha");
+        mostrarLoading("Carregando...", "Verificando sessão ativa");
 
-        if (!senhaSalva) {
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+
+        if (error || !session || !session.user) {
+            usuarioLogadoNome = "";
             abrirModalSenha();
             return;
         }
 
-        mostrarLoading("Carregando...", "Por favor, aguarde.");
-
-        const resultado = await validarSenhaNoServidor(senhaSalva);
-
-        if (resultado.status === "sucesso") {
-            await carregarContas({ gerenciarLoading: false });
-            esconderLoading();
-        } else {
-            localStorage.removeItem("controle_financeiro_senha");
-            abrirModalSenha("Sessão expirada ou senha inválida. Digite novamente.");
-        }
+        usuarioLogadoNome = resolverNomeUsuario(session.user);
+        await carregarContas({ gerenciarLoading: false });
+        esconderLoading();
     }
 
     checarSessaoInicial();
@@ -727,32 +691,37 @@ document.addEventListener("DOMContentLoaded", () => {
             event.preventDefault();
             if (loadingAtivo) return;
 
-            const senhaDigitada = senhaInput.value.trim();
+            const emailDigitado = emailInput.value.trim();
+            const senhaDigitada = senhaInput.value;
 
-            if (!senhaDigitada) {
-                abrirModalSenha("Por favor, digite sua senha.");
+            if (!emailDigitado || !senhaDigitada) {
+                abrirModalSenha("Por favor, informe e-mail e senha.");
                 return;
             }
 
-            mostrarLoading("Autenticando...", "Validando senha e carregando dados");
+            mostrarLoading("Autenticando...", "Validando credenciais");
 
-            const resultado = await validarSenhaNoServidor(senhaDigitada);
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
+                email: emailDigitado,
+                password: senhaDigitada
+            });
 
-            if (resultado.status === "sucesso") {
-                localStorage.setItem("controle_financeiro_senha", senhaDigitada);
-                fecharModalSenha();
-                await carregarContas({ gerenciarLoading: false });
-                esconderLoading();
-
-                Swal.fire({
-                    icon: "success",
-                    title: `Bem-vindo(a), ${resultado.usuario}!`,
-                    showConfirmButton: false,
-                    timer: 1500
-                });
-            } else {
-                abrirModalSenha(resultado.mensagem);
+            if (error || !data.user) {
+                abrirModalSenha("E-mail ou senha inválidos.");
+                return;
             }
+
+            usuarioLogadoNome = resolverNomeUsuario(data.user);
+            fecharModalSenha();
+            await carregarContas({ gerenciarLoading: false });
+            esconderLoading();
+
+            Swal.fire({
+                icon: "success",
+                title: `Bem-vindo(a), ${usuarioLogadoNome}!`,
+                showConfirmButton: false,
+                timer: 1500
+            });
         });
     }
 
@@ -781,9 +750,20 @@ document.addEventListener("DOMContentLoaded", () => {
     // ==========================================
     // MODAL DE NOVA CONTA E EDIÇÃO
     // ==========================================
-    function abrirModal() {
-        if (!localStorage.getItem("controle_financeiro_senha")) {
-            abrirModalSenha("Você precisa se autenticar primeiro.");
+    async function garantirUsuarioAutenticado() {
+        if (usuarioLogadoNome) return true;
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session && session.user) {
+            usuarioLogadoNome = resolverNomeUsuario(session.user);
+            return true;
+        }
+        return false;
+    }
+
+    async function abrirModal() {
+        const autenticado = await garantirUsuarioAutenticado();
+        if (!autenticado) {
+            abrirModalSenha("Você precisa entrar primeiro.");
             return;
         }
         idEmEdicao = null;
@@ -796,9 +776,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 100);
     }
 
-    function abrirModalEdicao(item) {
-        if (!localStorage.getItem("controle_financeiro_senha")) {
-            abrirModalSenha("Você precisa se autenticar primeiro.");
+    async function abrirModalEdicao(item) {
+        const autenticado = await garantirUsuarioAutenticado();
+        if (!autenticado) {
+            abrirModalSenha("Você precisa entrar primeiro.");
             return;
         }
         idEmEdicao = item.id;
@@ -841,17 +822,17 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // ==========================================
-    // SALVAR (CRIAR OU EDITAR) CONTA
+    // SALVAR (CRIAR OU EDITAR) CONTA (SUPABASE)
     // ==========================================
     if (accountForm) {
         accountForm.addEventListener("submit", async (event) => {
             event.preventDefault();
             if (loadingAtivo) return;
 
-            const senhaAtual = localStorage.getItem("controle_financeiro_senha");
-            if (!senhaAtual) {
+            const autenticado = await garantirUsuarioAutenticado();
+            if (!autenticado) {
                 fecharModal();
-                abrirModalSenha("Sessão expirada. Digite sua senha novamente.");
+                abrirModalSenha("Sessão expirada. Entre novamente.");
                 return;
             }
 
@@ -866,70 +847,60 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const editando = idEmEdicao !== null;
 
-            const payload = editando
-                ? {
-                    acao: "editar",
-                    senha: senhaAtual,
-                    id: idEmEdicao,
-                    conta,
-                    vencimento,
-                    valor,
-                    descricao
-                }
-                : {
-                    senha: senhaAtual,
-                    id: Date.now(),
-                    conta,
-                    vencimento,
-                    valor,
-                    descricao,
-                    criadoEm: new Date().toISOString()
-                };
-
             mostrarLoading(
                 editando ? "Atualizando conta..." : "Salvando conta...",
-                "Atualizando os dados"
+                "Salvando informações"
             );
 
             try {
-                const resposta = await fetch(URL_APPS_SCRIPT, {
-                    method: "POST",
-                    headers: { "Content-Type": "text/plain;charset=utf-8" },
-                    body: JSON.stringify(payload)
-                });
+                if (editando) {
+                    const { error } = await supabaseClient
+                        .from(TABELA_CONTAS)
+                        .update({
+                            conta,
+                            vencimento,
+                            valor,
+                            descricao
+                        })
+                        .eq("id", idEmEdicao);
 
-                const resultado = await resposta.json();
-
-                if (resultado.status === "sucesso") {
-                    fecharModal();
-                    await carregarContas({ gerenciarLoading: false });
-                    esconderLoading();
-
-                    Swal.fire({
-                        icon: "success",
-                        title: editando ? "Conta atualizada!" : "Conta salva!",
-                        text: editando ? "As alterações foram salvas." : `Lançamento registrado por ${resultado.usuario}`,
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
+                    if (error) {
+                        throw error;
+                    }
                 } else {
-                    esconderLoading();
-                    if (resultado.mensagem.includes("Senha incorreta")) {
-                        localStorage.removeItem("controle_financeiro_senha");
-                        fecharModal();
-                        abrirModalSenha("Senha incorreta ou expirada! Tente novamente.");
-                    } else {
-                        Swal.fire({
-                            icon: "error",
-                            title: "Oops...",
-                            text: resultado.mensagem
-                        });
+                    const novoId = String(Date.now());
+                    const { error } = await supabaseClient
+                        .from(TABELA_CONTAS)
+                        .insert([{
+                            id: novoId,
+                            usuario: usuarioLogadoNome,
+                            conta,
+                            vencimento,
+                            valor,
+                            descricao,
+                            status: "Pendente",
+                            criado_em: new Date().toISOString()
+                        }]);
+
+                    if (error) {
+                        throw error;
                     }
                 }
 
+                fecharModal();
+                await carregarContas({ gerenciarLoading: false });
+                esconderLoading();
+
+                Swal.fire({
+                    icon: "success",
+                    title: editando ? "Conta atualizada!" : "Conta salva!",
+                    text: editando ? "As alterações foram salvas." : `Lançamento registrado por ${usuarioLogadoNome}`,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
             } catch (erro) {
                 esconderLoading();
-                console.error("Erro ao salvar:", erro);
+                console.error("Erro ao salvar no Supabase:", erro);
                 Swal.fire({
                     icon: "error",
                     title: "Erro de Conexão",
