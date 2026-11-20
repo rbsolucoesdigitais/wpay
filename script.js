@@ -1160,7 +1160,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const tituloPush = editando ? "Conta atualizada" : "Nova conta adicionada";
                 const corpoPush = editando
                     ? `${usuarioLogadoNome} editou "${conta}" (${formatarMoeda(valor)}).`
-                    : `${usuarioLogadoNome} adicionou "${conta}" (${formatarMoeda(valor)}) para ${formatarData(vencimento)}.`;
+                    : `${usuarioLogadoNome} adicionou "${conta}" (${formatarMoeda(valor)}) vence ${formatarData(vencimento)}.`;
 
                 await notificarParceiro(tituloPush, corpoPush, "./");
                 await carregarContas({ gerenciarLoading: false });
