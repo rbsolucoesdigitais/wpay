@@ -1,12 +1,12 @@
 document.addEventListener("DOMContentLoaded", () => {
 
     // ==========================================
-    // CONFIGURAÇÃO DO SUPABASE
+    // CONFIGURAÇÃO DO SUPABASE (AUTH + SDK + PUSH)
     // ==========================================
     const SUPABASE_URL = "https://ghecmywfruopddenylfh.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_kcj0d9LQPRBjpIYl71WIAg_NQyoiyll";
     const TABELA_CONTAS = "contas";
-    
+    const VAPID_PUBLIC_KEY = "BOMauVNTMqbbLzLec1mrQiba2CvS35WQOHnTr_ph8napzEWBAo4Dt_I61PQ1rmFF3rpgte4Ru_e0mqQyaa1RNAk";
     const CHAVE_SESSAO_ABA = "controle_financeiro_sessao_ativa";
 
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -97,6 +97,86 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (btnInstalarApp) {
         btnInstalarApp.addEventListener("click", solicitarInstalacaoPWA);
+    }
+
+    // ==========================================
+    // WEB PUSH: REGISTRO E DISPARO (ANDROID)
+    // ==========================================
+    function urlBase64ToUint8Array(base64String) {
+        const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+        const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+    }
+
+    async function registrarNotificacaoPush(nomeUsuario) {
+        try {
+            if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+                return;
+            }
+            if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY.startsWith("COLE_AQUI")) return;
+
+            let permissao = Notification.permission;
+            if (permissao === "default") {
+                permissao = await Notification.requestPermission();
+            }
+            if (permissao !== "granted") return;
+
+            const registroSW = await navigator.serviceWorker.ready;
+            let subscription = await registroSW.pushManager.getSubscription();
+
+            if (!subscription) {
+                subscription = await registroSW.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                });
+            }
+
+            const jsonSub = subscription.toJSON();
+            if (!jsonSub.endpoint || !jsonSub.keys || !jsonSub.keys.p256dh || !jsonSub.keys.auth) {
+                return;
+            }
+
+            const { error } = await supabaseClient
+                .from("push_subscriptions")
+                .upsert([{
+                    usuario: nomeUsuario,
+                    endpoint: jsonSub.endpoint,
+                    p256dh: jsonSub.keys.p256dh,
+                    auth: jsonSub.keys.auth
+                }], { onConflict: "endpoint" });
+
+            if (error) {
+                console.error("Erro ao salvar assinatura push:", error);
+            }
+        } catch (erro) {
+            console.error("Falha ao registrar Web Push:", erro);
+        }
+    }
+
+    async function notificarParceiro(titulo, corpo, url = "./") {
+        if (!usuarioLogadoNome) return;
+
+        try {
+            const { error } = await supabaseClient.functions.invoke("notificar-parceiro", {
+                body: {
+                    autor: usuarioLogadoNome,
+                    titulo,
+                    corpo,
+                    url
+                }
+            });
+
+            if (error) {
+                console.error("Erro ao invocar notificar-parceiro:", error);
+            }
+        } catch (erro) {
+            console.error("Falha de rede ao notificar parceiro:", erro);
+        }
     }
 
     // ==========================================
@@ -449,7 +529,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // ==========================================
     async function carregarContas({ gerenciarLoading = true } = {}) {
         if (gerenciarLoading) {
-            mostrarLoading("Carregando contas...", "Consultando banco de dados");
+            mostrarLoading("Carregando informações...", "Por favor, aguarde.");
         }
 
         try {
@@ -491,9 +571,42 @@ document.addEventListener("DOMContentLoaded", () => {
     // ==========================================
     // REALTIME: ATUALIZAÇÃO AUTOMÁTICA SEM RELOAD
     // ==========================================
-    // ==========================================
-    // REALTIME: ATUALIZAÇÃO AUTOMÁTICA SEM RELOAD
-    // ==========================================
+    function exibirAvisoDeAlteracao(payload) {
+        if (!usuarioLogadoNome || typeof Swal === "undefined") return;
+
+        const registro = payload.new && Object.keys(payload.new).length > 0
+            ? payload.new
+            : payload.old;
+
+        if (!registro) return;
+
+        const autor = registro.usuario || "";
+        if (!autor || autor === usuarioLogadoNome) return;
+
+        const nomeConta = registro.conta || "uma conta";
+        let mensagem = `${autor} alterou "${nomeConta}".`;
+
+        if (payload.eventType === "INSERT") {
+            mensagem = `${autor} adicionou "${nomeConta}".`;
+        } else if (payload.eventType === "UPDATE") {
+            mensagem = registro.status === "Pago"
+                ? `${autor} quitou "${nomeConta}".`
+                : `${autor} atualizou "${nomeConta}".`;
+        } else if (payload.eventType === "DELETE") {
+            mensagem = `${autor} excluiu "${nomeConta}".`;
+        }
+
+        Swal.fire({
+            toast: true,
+            position: "top",
+            icon: "info",
+            title: mensagem,
+            showConfirmButton: false,
+            timer: 3200,
+            timerProgressBar: true
+        });
+    }
+
     function agendarSincronizacaoRealtime() {
         if (!usuarioLogadoNome || loadingAtivo) return;
         if (timerRealtime) clearTimeout(timerRealtime);
@@ -516,7 +629,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     schema: "public",
                     table: TABELA_CONTAS
                 },
-                () => {
+                (payload) => {
+                    exibirAvisoDeAlteracao(payload);
                     agendarSincronizacaoRealtime();
                 }
             )
@@ -546,40 +660,6 @@ document.addEventListener("DOMContentLoaded", () => {
             await iniciarRealtime();
         }
     });
-
-    function iniciarRealtime() {
-        if (canalRealtime) return;
-
-        canalRealtime = supabaseClient
-            .channel("contas-realtime")
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: TABELA_CONTAS
-                },
-                () => {
-                    agendarSincronizacaoRealtime();
-                }
-            )
-            .subscribe();
-    }
-
-    async function pararRealtime() {
-        if (timerRealtime) {
-            clearTimeout(timerRealtime);
-            timerRealtime = null;
-        }
-        if (canalRealtime) {
-            try {
-                await supabaseClient.removeChannel(canalRealtime);
-            } catch (erro) {
-                console.error("Erro ao encerrar canal Realtime:", erro);
-            }
-            canalRealtime = null;
-        }
-    }
 
     function renderizarLista(contas) {
         if (!accountsList) return;
@@ -671,19 +751,28 @@ document.addEventListener("DOMContentLoaded", () => {
         const novoStatus = item.status === "Pago" ? "Pendente" : "Pago";
         mostrarLoading(
             novoStatus === "Pago" ? "Quitando conta..." : "Reabrindo conta...",
-            "Atualizando status e recalculando painel"
+            "Atualizando status"
         );
 
         try {
             const { error } = await supabaseClient
                 .from(TABELA_CONTAS)
-                .update({ status: novoStatus })
+                .update({
+                    status: novoStatus,
+                    usuario: usuarioLogadoNome || item.usuario
+                })
                 .eq("id", item.id);
 
             if (error) {
                 throw error;
             }
 
+            const tituloPush = novoStatus === "Pago" ? "Conta quitada" : "Conta reaberta";
+            const corpoPush = novoStatus === "Pago"
+                ? `${usuarioLogadoNome} quitou "${item.conta}" (${formatarMoeda(item.valor)}).`
+                : `${usuarioLogadoNome} reabriu "${item.conta}" (${formatarMoeda(item.valor)}).`;
+
+            await notificarParceiro(tituloPush, corpoPush, "./");
             await carregarContas({ gerenciarLoading: false });
             esconderLoading();
         } catch (erro) {
@@ -712,7 +801,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (!confirmacao.isConfirmed) return;
 
-        mostrarLoading("Excluindo...", "Removendo registro e atualizando dados");
+        mostrarLoading("Excluindo...", "Removendo registro");
 
         try {
             const { error } = await supabaseClient
@@ -724,6 +813,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 throw error;
             }
 
+            await notificarParceiro(
+                "Conta excluída",
+                `${usuarioLogadoNome} excluiu "${item.conta}" (${formatarMoeda(item.valor)}).`,
+                "./"
+            );
             await carregarContas({ gerenciarLoading: false });
             esconderLoading();
             Swal.fire({
@@ -834,7 +928,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!error && session && session.user) {
                 usuarioLogadoNome = resolverNomeUsuario(session.user);
                 atualizarVisibilidadeLogout(true);
-                iniciarRealtime();
+                await registrarNotificacaoPush(usuarioLogadoNome);
+                await iniciarRealtime();
                 await carregarContas({ gerenciarLoading: false });
                 esconderLoading();
                 return;
@@ -866,7 +961,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            mostrarLoading("Autenticando...", "Validando credenciais no Supabase");
+            mostrarLoading("Autenticando...", "Validando credenciais");
 
             const { data, error } = await supabaseClient.auth.signInWithPassword({
                 email: emailDigitado,
@@ -882,7 +977,8 @@ document.addEventListener("DOMContentLoaded", () => {
             usuarioLogadoNome = resolverNomeUsuario(data.user);
             atualizarVisibilidadeLogout(true);
             fecharModalSenha();
-            iniciarRealtime();
+            await registrarNotificacaoPush(usuarioLogadoNome);
+            await iniciarRealtime();
             await carregarContas({ gerenciarLoading: false });
             esconderLoading();
 
@@ -1028,6 +1124,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     const { error } = await supabaseClient
                         .from(TABELA_CONTAS)
                         .update({
+                            usuario: usuarioLogadoNome,
                             conta,
                             vencimento,
                             valor,
@@ -1059,6 +1156,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
 
                 fecharModal();
+
+                const tituloPush = editando ? "Conta atualizada" : "Nova conta adicionada";
+                const corpoPush = editando
+                    ? `${usuarioLogadoNome} editou "${conta}" (${formatarMoeda(valor)}).`
+                    : `${usuarioLogadoNome} adicionou "${conta}" (${formatarMoeda(valor)}) para ${formatarData(vencimento)}.`;
+
+                await notificarParceiro(tituloPush, corpoPush, "./");
                 await carregarContas({ gerenciarLoading: false });
                 esconderLoading();
 
@@ -1081,4 +1185,4 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-});                          
+});
