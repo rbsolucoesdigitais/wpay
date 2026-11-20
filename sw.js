@@ -1,4 +1,4 @@
-const CACHE_NAME = "controle-financeiro-v4";
+const CACHE_NAME = "controle-financeiro-v5";
 const ARQUIVOS_ESTATICOS = [
   "./",
   "./index.html",
@@ -22,9 +22,8 @@ self.addEventListener("activate", (event) => {
           .filter((key) => key !== CACHE_NAME)
           .map((key) => caches.delete(key))
       )
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
@@ -33,6 +32,7 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
+
       return fetch(event.request)
         .then((response) => {
           if (!response || response.status !== 200 || response.type !== "basic") {
@@ -42,7 +42,67 @@ self.addEventListener("fetch", (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copia));
           return response;
         })
-        .catch(() => cached);
+        .catch(() => caches.match("./index.html"));
+    })
+  );
+});
+
+self.addEventListener("push", (event) => {
+  let dados = {
+    titulo: "Controle Financeiro",
+    corpo: "Houve uma atualização nas contas.",
+    url: "./"
+  };
+
+  if (event.data) {
+    try {
+      const texto = event.data.text();
+      if (texto) {
+        try {
+          const payload = JSON.parse(texto);
+          dados = {
+            titulo: payload.titulo || dados.titulo,
+            corpo: payload.corpo || dados.corpo,
+            url: payload.url || dados.url
+          };
+        } catch (_) {
+          dados.corpo = texto;
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao ler payload do push:", err);
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(dados.titulo, {
+      body: dados.corpo,
+      icon: "./logo.png",
+      badge: "./logo.png",
+      vibrate: [120, 60, 120],
+      tag: "controle-financeiro-notif",
+      renotify: true,
+      data: { url: dados.url }
+    }).catch((err) => {
+      console.error("Falha ao exibir notificação push:", err);
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const destinoUrl = (event.notification.data && event.notification.data.url) || "./";
+
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((listaJanelas) => {
+      for (const janela of listaJanelas) {
+        if ("focus" in janela) {
+          return janela.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(destinoUrl);
+      }
     })
   );
 });
