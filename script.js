@@ -6,11 +6,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const SUPABASE_URL = "https://ghecmywfruopddenylfh.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_kcj0d9LQPRBjpIYl71WIAg_NQyoiyll";
     const TABELA_CONTAS = "contas";
+    
+    const CHAVE_SESSAO_ABA = "controle_financeiro_sessao_ativa";
 
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: {
-            persistSession: false,
-            autoRefreshToken: false
+            persistSession: true,
+            autoRefreshToken: true
         }
     });
 
@@ -146,6 +148,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let termoBusca = "";
     let loadingAtivo = false;
     let usuarioLogadoNome = "";
+    let canalRealtime = null;
+    let timerRealtime = null;
 
     // ==========================================
     // CONTROLE CENTRALIZADO DE LOADING
@@ -484,6 +488,53 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // ==========================================
+    // REALTIME: ATUALIZAÇÃO AUTOMÁTICA SEM RELOAD
+    // ==========================================
+    function agendarSincronizacaoRealtime() {
+        if (!usuarioLogadoNome || loadingAtivo) return;
+        if (timerRealtime) clearTimeout(timerRealtime);
+
+        timerRealtime = setTimeout(async () => {
+            if (!usuarioLogadoNome || loadingAtivo) return;
+            await carregarContas({ gerenciarLoading: false });
+        }, 180);
+    }
+
+    function iniciarRealtime() {
+        if (canalRealtime) return;
+
+        canalRealtime = supabaseClient
+            .channel("contas-realtime")
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: TABELA_CONTAS
+                },
+                () => {
+                    agendarSincronizacaoRealtime();
+                }
+            )
+            .subscribe();
+    }
+
+    async function pararRealtime() {
+        if (timerRealtime) {
+            clearTimeout(timerRealtime);
+            timerRealtime = null;
+        }
+        if (canalRealtime) {
+            try {
+                await supabaseClient.removeChannel(canalRealtime);
+            } catch (erro) {
+                console.error("Erro ao encerrar canal Realtime:", erro);
+            }
+            canalRealtime = null;
+        }
+    }
+
     function renderizarLista(contas) {
         if (!accountsList) return;
         accountsList.innerHTML = "";
@@ -705,6 +756,8 @@ document.addEventListener("DOMContentLoaded", () => {
         mostrarLoading("Saindo...", "Encerrando sua sessão");
 
         try {
+            sessionStorage.removeItem(CHAVE_SESSAO_ABA);
+            await pararRealtime();
             await supabaseClient.auth.signOut();
         } catch (erro) {
             console.error("Erro ao encerrar sessão no Supabase:", erro);
@@ -726,6 +779,23 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     async function checarSessaoInicial() {
+        const ehReloadMesmaSessao = sessionStorage.getItem(CHAVE_SESSAO_ABA) === "1";
+
+        if (ehReloadMesmaSessao) {
+            mostrarLoading("Carregando...", "Restaurando sessão");
+            const { data: { session }, error } = await supabaseClient.auth.getSession();
+
+            if (!error && session && session.user) {
+                usuarioLogadoNome = resolverNomeUsuario(session.user);
+                atualizarVisibilidadeLogout(true);
+                iniciarRealtime();
+                await carregarContas({ gerenciarLoading: false });
+                esconderLoading();
+                return;
+            }
+        }
+
+        sessionStorage.removeItem(CHAVE_SESSAO_ABA);
         usuarioLogadoNome = "";
         contasEmMemoria = [];
         atualizarVisibilidadeLogout(false);
@@ -762,9 +832,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
+            sessionStorage.setItem(CHAVE_SESSAO_ABA, "1");
             usuarioLogadoNome = resolverNomeUsuario(data.user);
             atualizarVisibilidadeLogout(true);
             fecharModalSenha();
+            iniciarRealtime();
             await carregarContas({ gerenciarLoading: false });
             esconderLoading();
 
