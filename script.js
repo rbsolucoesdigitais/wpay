@@ -981,13 +981,6 @@ document.addEventListener("DOMContentLoaded", () => {
             await iniciarRealtime();
             await carregarContas({ gerenciarLoading: false });
             esconderLoading();
-
-            Swal.fire({
-                icon: "success",
-                title: `Bem-vindo(a), ${usuarioLogadoNome}!`,
-                showConfirmButton: false,
-                timer: 1500
-            });
         });
     }
 
