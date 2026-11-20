@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Finanças">
-    <title>Wpay</title>
+    <title>Controle Financeiro</title>
     <link rel="manifest" href="manifest.json">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -27,24 +27,25 @@
                         <img src="logo.png" alt="">
                     </div>
                 </div>
-                <button
-                    type="button"
-                    id="btnInstalarApp"
-                    style="display: none; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 12px; border: 1px solid #dbe4ff; background: #eef2ff; color: #4263eb; font-size: 0.8rem; font-weight: 700; white-space: nowrap;"
-                >
-                    <i data-lucide="download" style="width: 16px; height: 16px;"></i>
-                    <span>Instalar</span>
-                </button>
-                <button
-                    type="button"
-                    id="btnLogout"
-                    class="btn-logout"
-                    title="Sair da conta"
-                    style="display: none; align-items: center; gap: 6px; padding: 9px 12px; border-radius: 12px; border: 1px solid #ffe4e6; background: #fff1f2; color: #e11d48; font-size: 0.8rem; font-weight: 700; white-space: nowrap; cursor: pointer;"
-                >
-                    <i data-lucide="log-out" style="width: 16px; height: 16px;"></i>
-                    <span>Sair</span>
-                </button>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button
+                        type="button"
+                        id="btnInstalarApp"
+                        style="display: none; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 12px; border: 1px solid #dbe4ff; background: #eef2ff; color: #4263eb; font-size: 0.8rem; font-weight: 700; white-space: nowrap;"
+                    >
+                        <i data-lucide="download" style="width: 16px; height: 16px;"></i>
+                        <span>Instalar</span>
+                    </button>
+                    <button
+                        type="button"
+                        class="btn-logout"
+                        title="Sair da conta"
+                        style="display: none; align-items: center; gap: 6px; padding: 9px 12px; border-radius: 12px; border: 1px solid #ffe4e6; background: #fff1f2; color: #e11d48; font-size: 0.8rem; font-weight: 700; white-space: nowrap; cursor: pointer;"
+                    >
+                        <i data-lucide="log-out" style="width: 16px; height: 16px;"></i>
+                        <span>Sair</span>
+                    </button>
+                </div>
             </header>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px;">
@@ -97,9 +98,20 @@
                         <img src="logo.png" alt="">
                     </div>
                 </div>
-                <button class="add-button" id="openModal" type="button" aria-label="Adicionar nova conta">
-                    <i data-lucide="plus"></i>
-                </button>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button
+                        type="button"
+                        class="btn-logout"
+                        title="Sair da conta"
+                        style="display: none; align-items: center; gap: 6px; padding: 9px 12px; border-radius: 12px; border: 1px solid #ffe4e6; background: #fff1f2; color: #e11d48; font-size: 0.8rem; font-weight: 700; white-space: nowrap; cursor: pointer;"
+                    >
+                        <i data-lucide="log-out" style="width: 16px; height: 16px;"></i>
+                        <span>Sair</span>
+                    </button>
+                    <button class="add-button" id="openModal" type="button" aria-label="Adicionar nova conta">
+                        <i data-lucide="plus"></i>
+                    </button>
+                </div>
             </header>
 
             <div style="margin-top: 12px; flex-shrink: 0;">
