@@ -491,6 +491,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // ==========================================
     // REALTIME: ATUALIZAÇÃO AUTOMÁTICA SEM RELOAD
     // ==========================================
+    // ==========================================
+    // REALTIME: ATUALIZAÇÃO AUTOMÁTICA SEM RELOAD
+    // ==========================================
     function agendarSincronizacaoRealtime() {
         if (!usuarioLogadoNome || loadingAtivo) return;
         if (timerRealtime) clearTimeout(timerRealtime);
@@ -498,8 +501,51 @@ document.addEventListener("DOMContentLoaded", () => {
         timerRealtime = setTimeout(async () => {
             if (!usuarioLogadoNome || loadingAtivo) return;
             await carregarContas({ gerenciarLoading: false });
-        }, 180);
+        }, 150);
     }
+
+    async function iniciarRealtime() {
+        await pararRealtime();
+
+        canalRealtime = supabaseClient
+            .channel(`contas-realtime-${Date.now()}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: TABELA_CONTAS
+                },
+                () => {
+                    agendarSincronizacaoRealtime();
+                }
+            )
+            .subscribe((status) => {
+                console.log("Status Realtime:", status);
+            });
+    }
+
+    async function pararRealtime() {
+        if (timerRealtime) {
+            clearTimeout(timerRealtime);
+            timerRealtime = null;
+        }
+        if (canalRealtime) {
+            try {
+                await supabaseClient.removeChannel(canalRealtime);
+            } catch (erro) {
+                console.error("Erro ao encerrar canal Realtime:", erro);
+            }
+            canalRealtime = null;
+        }
+    }
+
+    document.addEventListener("visibilitychange", async () => {
+        if (document.visibilityState === "visible" && usuarioLogadoNome) {
+            await carregarContas({ gerenciarLoading: false });
+            await iniciarRealtime();
+        }
+    });
 
     function iniciarRealtime() {
         if (canalRealtime) return;
