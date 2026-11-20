@@ -69,11 +69,11 @@ document.addEventListener("DOMContentLoaded", () => {
         event.preventDefault();
         eventoInstalacaoPendente = event;
 
-        if (btnInstalarApp) {
+        if (btnInstalarApp && usuarioLogadoNome) {
             btnInstalarApp.style.display = "inline-flex";
         }
 
-        if (!jaSolicitouNestaSessao && !loadingAtivo && (!authModal || !authModal.classList.contains("show"))) {
+        if (!jaSolicitouNestaSessao && !loadingAtivo && usuarioLogadoNome && (!authModal || !authModal.classList.contains("show"))) {
             jaSolicitouNestaSessao = true;
             solicitarInstalacaoPWA();
         }
@@ -102,6 +102,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // ==========================================
     const navItems = document.querySelectorAll(".nav-item");
     const contents = document.querySelectorAll(".tab-content");
+    const botoesLogout = document.querySelectorAll(".btn-logout");
 
     // Elementos da Dash
     const qtdPendentesEl = document.getElementById("qtdPendentes");
@@ -149,7 +150,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // ==========================================
     // CONTROLE CENTRALIZADO DE LOADING
     // ==========================================
-    function mostrarLoading(titulo = "Carregando...", texto = "Aguarde enquanto carregamos os dados") {
+    function mostrarLoading(titulo = "Carregando...", texto = "Aguarde enquanto sincronizamos os dados") {
         if (typeof Swal === "undefined") return;
         loadingAtivo = true;
 
@@ -181,7 +182,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typeof Swal !== "undefined" && Swal.isVisible()) {
             Swal.close();
         }
-        if (eventoInstalacaoPendente && !jaSolicitouNestaSessao && (!authModal || !authModal.classList.contains("show"))) {
+        if (eventoInstalacaoPendente && !jaSolicitouNestaSessao && usuarioLogadoNome && (!authModal || !authModal.classList.contains("show"))) {
             jaSolicitouNestaSessao = true;
             solicitarInstalacaoPWA();
         }
@@ -444,7 +445,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // ==========================================
     async function carregarContas({ gerenciarLoading = true } = {}) {
         if (gerenciarLoading) {
-            mostrarLoading("Carregando informações...", "Por favor, aguarde.");
+            mostrarLoading("Carregando contas...", "Consultando banco de dados");
         }
 
         try {
@@ -573,7 +574,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const novoStatus = item.status === "Pago" ? "Pendente" : "Pago";
         mostrarLoading(
             novoStatus === "Pago" ? "Quitando conta..." : "Reabrindo conta...",
-            "Atualizando status"
+            "Atualizando status e recalculando painel"
         );
 
         try {
@@ -614,7 +615,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (!confirmacao.isConfirmed) return;
 
-        mostrarLoading("Excluindo...", "Removendo registro");
+        mostrarLoading("Excluindo...", "Removendo registro e atualizando dados");
 
         try {
             const { error } = await supabaseClient
@@ -643,10 +644,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ==========================================
-    // CONTROLE DE ACESSO (SUPABASE AUTH)
+    // CONTROLE DE ACESSO E LOGOUT (SUPABASE AUTH)
     // ==========================================
+    function atualizarVisibilidadeLogout(logado) {
+        botoesLogout.forEach(btn => {
+            btn.style.display = logado ? "inline-flex" : "none";
+        });
+        if (btnInstalarApp) {
+            btnInstalarApp.style.display = logado && eventoInstalacaoPendente && !appJaInstalado ? "inline-flex" : "none";
+        }
+    }
+
     function abrirModalSenha(mensagemErro = "") {
         esconderLoading();
+        atualizarVisibilidadeLogout(false);
         if (!authModal) return;
 
         if (mensagemErro && authError) {
@@ -673,10 +684,53 @@ document.addEventListener("DOMContentLoaded", () => {
         if (authError) authError.style.display = "none";
     }
 
-    aasync function checarSessaoInicial() {
+    async function fazerLogout({ confirmar = true } = {}) {
+        if (loadingAtivo) return;
+
+        if (confirmar && typeof Swal !== "undefined") {
+            const confirmacao = await Swal.fire({
+                title: "Sair da conta?",
+                text: "Você precisará fazer login novamente para acessar as contas.",
+                icon: "question",
+                showCancelButton: true,
+                confirmButtonColor: "#e11d48",
+                cancelButtonColor: "#64748b",
+                confirmButtonText: "Sim, sair",
+                cancelButtonText: "Cancelar"
+            });
+
+            if (!confirmacao.isConfirmed) return;
+        }
+
+        mostrarLoading("Saindo...", "Encerrando sua sessão");
+
+        try {
+            await supabaseClient.auth.signOut();
+        } catch (erro) {
+            console.error("Erro ao encerrar sessão no Supabase:", erro);
+        } finally {
+            usuarioLogadoNome = "";
+            contasEmMemoria = [];
+            idEmEdicao = null;
+            fecharModal();
+            if (accountsList) accountsList.innerHTML = "";
+            atualizarDash([]);
+            atualizarVisibilidadeLogout(false);
+            esconderLoading();
+            abrirModalSenha();
+        }
+    }
+
+    botoesLogout.forEach(btn => {
+        btn.addEventListener("click", () => fazerLogout({ confirmar: true }));
+    });
+
+    async function checarSessaoInicial() {
         usuarioLogadoNome = "";
         contasEmMemoria = [];
+        atualizarVisibilidadeLogout(false);
         if (accountsList) accountsList.innerHTML = "";
+        atualizarDash([]);
         await supabaseClient.auth.signOut();
         abrirModalSenha();
     }
@@ -696,7 +750,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            mostrarLoading("Autenticando...", "Validando credenciais");
+            mostrarLoading("Autenticando...", "Validando credenciais no Supabase");
 
             const { data, error } = await supabaseClient.auth.signInWithPassword({
                 email: emailDigitado,
@@ -709,6 +763,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             usuarioLogadoNome = resolverNomeUsuario(data.user);
+            atualizarVisibilidadeLogout(true);
             fecharModalSenha();
             await carregarContas({ gerenciarLoading: false });
             esconderLoading();
@@ -752,6 +807,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const { data: { session } } = await supabaseClient.auth.getSession();
         if (session && session.user) {
             usuarioLogadoNome = resolverNomeUsuario(session.user);
+            atualizarVisibilidadeLogout(true);
             return true;
         }
         return false;
@@ -846,7 +902,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             mostrarLoading(
                 editando ? "Atualizando conta..." : "Salvando conta...",
-                "Salvando informações"
+                "Gravando no Supabase e atualizando lista"
             );
 
             try {
@@ -907,4 +963,4 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-});
+});                          
